@@ -1,6 +1,11 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';import {runInNewContext} from 'node:vm';import {newDb} from 'pg-mem';
 import {SalesKeyStore,salesResponse} from './app/sales-api.mjs';import {itunesSalesText} from './app/public/sales-text.js';
+import {formatSaleRate} from './app/public/sales-text.js';
+test('sales rates preserve four significant digits and round upward across boundaries',()=>{
+ for(const [price,text] of [[27.3,'27.30'],[1.523,'1.523'],[.199,'0.1990'],[123.4,'123.4'],[27.301,'27.31'],[1.5231,'1.524'],[.19901,'0.1991'],[9.9991,'10.00'],[99.991,'100.0'],[999.91,'1000'],[12345,'12350'],[0,'0.000']])assert.equal(formatSaleRate(price),text);
+ assert.throws(()=>formatSaleRate(NaN));assert.throws(()=>formatSaleRate(-1));
+});
 test('API text equals frontend copy text with age overrides, blanks, and country separation',async()=>{
  const settings={fx:33.5,purchaseFee:.251,markup:2,fee:0,categoryCountryMarkups:{'itunes:US':4},itunesAgeMarkups:{'US:1+':1,'US:5+':0,'US:9+':9}};
  const accounts=['1-5','5-9','9+'].map((age,i)=>({category:'itunes',country:'US',type:i===1?'Split':'Whole',age,paymentUsd:400,denomination:500,stock:2}));

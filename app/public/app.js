@@ -1,4 +1,4 @@
-import {itunesSalesText} from './sales-text.js';
+import {itunesSalesText,formatSaleRate} from './sales-text.js';
 const $=id=>document.getElementById(id),nf=new Intl.NumberFormat('en-US',{maximumFractionDigits:2});
 let state,tab='accounts',page=0,initialized=false,lastSnapshot='',toast='';const pageSize=30;
 const names={US:'สหรัฐอเมริกา',UK:'สหราชอาณาจักร',DE:'เยอรมนี',FR:'ฝรั่งเศส',IT:'อิตาลี',ES:'สเปน',GR:'กรีซ',AU:'ออสเตรเลีย',CA:'แคนาดา',JP:'ญี่ปุ่น',TW:'ไต้หวัน',CH:'สวิตเซอร์แลนด์',MX:'เม็กซิโก',TR:'ตุรกี',DK:'เดนมาร์ก',NZ:'นิวซีแลนด์',SE:'สวีเดน',NO:'นอร์เวย์',BR:'บราซิล',NL:'เนเธอร์แลนด์',BE:'เบลเยียม',AT:'ออสเตรีย',PT:'โปรตุเกส',IE:'ไอร์แลนด์',FI:'ฟินแลนด์'};
@@ -38,7 +38,7 @@ function rechargeGroups(rows){
  const groups=new Map();
  for(const row of rows){
   const cost=money(row)/row.denomination;
-  const sale=sell(row)===null?null:(Math.ceil((sell(row)/row.denomination-1e-10)*100)/100).toFixed(2);
+  const sale=sell(row)===null?null:formatSaleRate(sell(row)/row.denomination);
   const key=JSON.stringify([row.category||'itunes',row.country,row.channel,sale??cost.toFixed(4)]);
   if(!groups.has(key))groups.set(key,{...row,unitCost:cost,unitSale:sale,costs:new Set(),queues:new Set()});
   groups.get(key).queues.add(Number(row.queueAmount));groups.get(key).costs.add(cost);
@@ -71,7 +71,7 @@ function renderSales(){
   const lines=['- '+category+' เติมบัญชี -','ราคาเติม: บาทต่อหน่วยยอดเติม',''];
   const quotes=new Set();
   for(const x of (state.snapshot.recharge||[]).filter(x=>(x.category||'itunes')===category)){
-   const rate=(Math.ceil((sell(x)/x.denomination-1e-10)*100)/100).toFixed(2);
+   const rate=formatSaleRate(sell(x)/x.denomination);
    quotes.add(category+' '+x.country.toLowerCase()+' '+x.channel+' '+rate);
   }
   lines.push(...quotes);

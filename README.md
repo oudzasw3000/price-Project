@@ -52,7 +52,7 @@ Create an API key in Setting > API ข้อความขาย iTunes and cop
 GET /api/sales/itunes
 Authorization: Bearer YOUR_API_KEY
 
-Successful response: HTTP 200, Content-Type: application/json; charset=utf-8, exactly {"text":"..."}. Newlines are JSON-escaped as \n and become line breaks when parsed. The text matches the iTunes account sales copy view, with THB prices rounded upward to two decimals, country-specific 1+/5+/9+ markup, and blank out-of-stock age lines.
+Successful response: HTTP 200, Content-Type: application/json; charset=utf-8, exactly {"text":"..."}. Newlines are JSON-escaped as \n and become line breaks when parsed. The text matches the iTunes account sales copy view, with THB prices rounded upward to four significant digits (27.30, 1.523, 0.1990), country-specific 1+/5+/9+ markup, and blank out-of-stock age lines.
 
 This endpoint serves the latest successful stock snapshot and the current usable Bitkub quote; it does not trigger supplier calls. Configure the automatic inventory update interval in Setting. A snapshot can be older if the latest sync failed. No timestamp is appended to the sales text.
 
