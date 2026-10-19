@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {AuthStore} from './auth-store.mjs';
 import {createSettingsStore} from './settings-store.mjs';
 import {hostingConfig,authorized} from './hosting.mjs';
 const hosting=hostingConfig();
@@ -20,6 +21,8 @@ delete process.env.PROMO_EMAIL;delete process.env.PROMO_PASSWORD;
 if(bootEmail&&bootPassword){vault.credentials={email:bootEmail,password:bootPassword};vault.remember=true;}
 const settingsStore=createSettingsStore(path.join(local,'settings.json'));
 let settings;try{settings=await settingsStore.load();}catch{await settingsStore.close();throw new Error('Cannot load settings database. Check DATABASE_URL and existing settings; startup aborted.');}
+const adminAuth=settingsStore.pool?new AuthStore(settingsStore.pool):null;
+if(adminAuth)await adminAuth.load();
 let snapshot=null;try{snapshot=JSON.parse(await readFile(path.join(local,'snapshot.json'),'utf8'));}catch{}
 if(!snapshot){
   const dirs=(await readdir(path.join(root,'captures')).catch(()=>[])).filter(x=>x.startsWith('api-')).sort().reverse();
@@ -76,13 +79,15 @@ const server=http.createServer(async(req,res)=>{
   res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'");
   if(req.method==='GET'&&req.url==='/healthz'){send(res,200,{ok:true});return;}
   if(!hosting.hosts.includes(req.headers.host)){send(res,403,{error:'Invalid host'});return;}
-  if(!authorized(req.headers.authorization)){res.setHeader('WWW-Authenticate','Basic realm="Gamestation Rate", charset="UTF-8"');send(res,401,{error:'Authentication required'});return;}
+  let access=false;try{access=adminAuth?await adminAuth.authorized(req.headers.authorization):authorized(req.headers.authorization);}catch{send(res,503,{error:'Authentication database unavailable'});return;}
+  if(!access){res.setHeader('WWW-Authenticate','Basic realm="Gamestation Rate", charset="UTF-8"');send(res,401,{error:'Authentication required'});return;}
   try{
     const url=new URL(req.url,origin),route=url.pathname;
     if(req.method==='GET'&&route==='/api/state'){send(res,200,publicState());return;}
     if(req.method==='POST'){
       if(!hosting.origins.includes(req.headers.origin)||!req.headers['content-type']?.startsWith('application/json')){send(res,403,{error:'Invalid origin'});return;}
       const input=await body(req);
+      if(route==='/api/admin'){if(!adminAuth){send(res,400,{error:'Database required'});return;}await adminAuth.change(input.currentPassword,input.username,input.password);send(res,200,{ok:true});return;}
       if(route==='/api/sync'){if(job.running){send(res,409,{error:'กำลังอัปเดตอยู่'});return;}void sync();send(res,202,{ok:true});return;}
       if(route==='/api/stop'){controller?.abort();job.message='กำลังหยุดหลังคำขอปัจจุบัน';send(res,200,{ok:true});return;}
       if(route==='/api/settings'){let next;try{next=await settingsStore.save(input);}catch{send(res,503,{error:'บันทึกการตั้งค่าไม่สำเร็จ กรุณาตรวจค่าหรือการเชื่อมต่อฐานข้อมูลแล้วลองใหม่'});return;}settings=next;if(!job.running)schedule();send(res,200,{ok:true});return;}

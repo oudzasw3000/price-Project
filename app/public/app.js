@@ -121,3 +121,5 @@ $('sales-category').onchange=renderSales;
 $('purchaseFee').addEventListener('input',renderEffectiveFx);
 async function poll(){try{await refresh();}catch(e){error(e);}setTimeout(poll,state?.job.running?1200:4000);}poll();
 
+
+$('admin-form').onsubmit=async e=>{e.preventDefault();try{await post('/api/admin',{currentPassword:$('admin-current').value,username:$('admin-name').value,password:$('admin-password').value});$('admin-current').value='';$('admin-password').value='';$('admin-status').textContent='บันทึกแล้ว เมื่อระบบถามให้เข้าสู่ระบบด้วยบัญชีใหม่';}catch(err){$('admin-status').textContent=err.message;}};

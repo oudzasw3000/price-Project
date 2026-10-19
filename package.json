@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node app/server.mjs",
-    "test": "node --test tests.mjs protocol-tests.mjs app-tests.mjs hosting-tests.mjs settings-store-tests.mjs"
+    "test": "node --test tests.mjs protocol-tests.mjs app-tests.mjs hosting-tests.mjs settings-store-tests.mjs auth-store-tests.mjs"
   },
   "dependencies": {
     "pg": "^8.23.1"

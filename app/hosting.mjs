@@ -6,7 +6,7 @@ export function hostingConfig(env=process.env){
   const origin=new URL(env.PUBLIC_URL||(env.RAILWAY_PUBLIC_DOMAIN?'https://'+env.RAILWAY_PUBLIC_DOMAIN:'http://127.0.0.1:'+port)).origin;
   if(cloud){
     if(!origin.startsWith('https://'))throw new Error('Set PUBLIC_URL to your HTTPS Railway domain');
-    if(!env.APP_USERNAME||!env.APP_PASSWORD||env.APP_PASSWORD.length<16)throw new Error('Set APP_USERNAME and APP_PASSWORD (at least 16 characters)');
+    if(!env.DATABASE_URL&&(!env.APP_USERNAME||!env.APP_PASSWORD||env.APP_PASSWORD.length<16))throw new Error('Set APP_USERNAME and APP_PASSWORD (at least 16 characters)');
     if(!/^[a-f0-9]{64}$/i.test(env.VAULT_KEY||''))throw new Error('Set VAULT_KEY to 64 hexadecimal characters');
     if(!env.DATA_DIR&&!env.RAILWAY_VOLUME_MOUNT_PATH)throw new Error('Attach a Railway volume or set DATA_DIR');
   }

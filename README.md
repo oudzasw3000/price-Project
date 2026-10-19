@@ -41,3 +41,6 @@ Railway documentation: https://docs.railway.com/volumes and https://docs.railway
 ## Settings database behavior
 
 Production requires DATABASE_URL. Startup stops if the database cannot be loaded. A failed save returns an error and leaves active settings unchanged. Pricing allowance, default markup, per-category/country markups, fee and refresh interval are all persisted together. The app remains single-instance/single-account; this is not per-user tenancy. Locally, without DATABASE_URL, settings.json remains supported. Tests use pg-mem for SQL behavior; verify against your Railway PostgreSQL after connecting.
+
+## Database login
+When DATABASE_URL is configured, login is stored in gamestation_admin with a salted scrypt hash. APP_USERNAME and APP_PASSWORD initialize the account only when the table is empty (minimum password length 5). Set these bootstrap variables before the first deployment. Existing database credentials are never overwritten on restart. Change the username and password in Setting > บัญชีเข้าโปรแกรม using the current password. The next request requires the new Basic Auth credentials. The supplier account remains separate. Never commit real bootstrap credentials.
