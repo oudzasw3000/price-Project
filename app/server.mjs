@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {SalesKeyStore,salesResponse} from './sales-api.mjs';
 import {AuthStore} from './auth-store.mjs';
 import {createSettingsStore} from './settings-store.mjs';
 import {hostingConfig,authorized} from './hosting.mjs';
@@ -23,6 +24,8 @@ const settingsStore=createSettingsStore(path.join(local,'settings.json'));
 let settings;try{settings=await settingsStore.load();}catch{await settingsStore.close();throw new Error('Cannot load settings database. Check DATABASE_URL and existing settings; startup aborted.');}
 const adminAuth=settingsStore.pool?new AuthStore(settingsStore.pool):null;
 if(adminAuth)await adminAuth.load();
+const salesKeys=settingsStore.pool?new SalesKeyStore(settingsStore.pool):null;
+if(salesKeys)await salesKeys.load();
 let snapshot=null;try{snapshot=JSON.parse(await readFile(path.join(local,'snapshot.json'),'utf8'));}catch{}
 if(!snapshot){
   const dirs=(await readdir(path.join(root,'captures')).catch(()=>[])).filter(x=>x.startsWith('api-')).sort().reverse();
@@ -71,7 +74,7 @@ async function sync(){
   finally{job.running=false;controller=null;schedule();}
 }
 const {port,origin}=hosting;
-const files={'/':['index.html','text/html; charset=utf-8'],'/app.js':['app.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8']};
+const files={'/sales-text.js':['sales-text.js','text/javascript; charset=utf-8'],'/':['index.html','text/html; charset=utf-8'],'/app.js':['app.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8']};
 async function body(req){let text='';for await(const chunk of req){text+=chunk;if(text.length>16000)throw new Error('Request too large');}return JSON.parse(text||'{}');}
 function send(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));}
 const server=http.createServer(async(req,res)=>{
@@ -79,6 +82,11 @@ const server=http.createServer(async(req,res)=>{
   res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'");
   if(req.method==='GET'&&req.url==='/healthz'){send(res,200,{ok:true});return;}
   if(!hosting.hosts.includes(req.headers.host)){send(res,403,{error:'Invalid host'});return;}
+  if(new URL(req.url,origin).pathname==='/api/sales/itunes'){
+    if(req.method!=='GET'){res.setHeader('Allow','GET');send(res,405,{error:'Method not allowed'});return;}
+    try{if(!salesKeys||!await salesKeys.authorized(req.headers.authorization)){send(res,401,{error:'Valid Bearer API key required'});return;}}catch{send(res,503,{error:'API authentication unavailable'});return;}
+    try{send(res,200,salesResponse(snapshot,settings,marketRate.state()));}catch{res.setHeader('Retry-After','30');send(res,503,{error:'Sales data or exchange rate is not ready'});}return;
+  }
   let access=false;try{access=adminAuth?await adminAuth.authorized(req.headers.authorization):authorized(req.headers.authorization);}catch{send(res,503,{error:'Authentication database unavailable'});return;}
   if(!access){res.setHeader('WWW-Authenticate','Basic realm="Gamestation Rate", charset="UTF-8"');send(res,401,{error:'Authentication required'});return;}
   try{
@@ -87,6 +95,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='POST'){
       if(!hosting.origins.includes(req.headers.origin)||!req.headers['content-type']?.startsWith('application/json')){send(res,403,{error:'Invalid origin'});return;}
       const input=await body(req);
+      if(route==='/api/sales-key'){if(!salesKeys){send(res,503,{error:'Database required'});return;}send(res,200,{key:await salesKeys.rotate()});return;}
       if(route==='/api/admin'){if(!adminAuth){send(res,400,{error:'Database required'});return;}await adminAuth.change(input.currentPassword,input.username,input.password);send(res,200,{ok:true});return;}
       if(route==='/api/sync'){if(job.running){send(res,409,{error:'กำลังอัปเดตอยู่'});return;}void sync();send(res,202,{ok:true});return;}
       if(route==='/api/stop'){controller?.abort();job.message='กำลังหยุดหลังคำขอปัจจุบัน';send(res,200,{ok:true});return;}

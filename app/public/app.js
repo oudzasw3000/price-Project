@@ -1,3 +1,4 @@
+import {itunesSalesText} from './sales-text.js';
 const $=id=>document.getElementById(id),nf=new Intl.NumberFormat('en-US',{maximumFractionDigits:2});
 let state,tab='accounts',page=0,initialized=false,lastSnapshot='',toast='';const pageSize=30;
 const names={US:'สหรัฐอเมริกา',UK:'สหราชอาณาจักร',DE:'เยอรมนี',FR:'ฝรั่งเศส',IT:'อิตาลี',ES:'สเปน',GR:'กรีซ',AU:'ออสเตรเลีย',CA:'แคนาดา',JP:'ญี่ปุ่น',TW:'ไต้หวัน',CH:'สวิตเซอร์แลนด์',MX:'เม็กซิโก',TR:'ตุรกี',DK:'เดนมาร์ก',NZ:'นิวซีแลนด์',SE:'สวีเดน',NO:'นอร์เวย์',BR:'บราซิล',NL:'เนเธอร์แลนด์',BE:'เบลเยียม',AT:'ออสเตรีย',PT:'โปรตุเกส',IE:'ไอร์แลนด์',FI:'ฟินแลนด์'};
@@ -77,17 +78,7 @@ function renderSales(){
   if(lines.length===3)lines.push('ยังไม่มีข้อมูล กรุณาอัปเดตข้อมูล');
   $('sales').value=lines.join('\n');return;
  }
- const accounts=state.snapshot.accounts||[],countries=[...new Set(accounts.map(x=>x.country))],lines=['- itunes -','ราคาขาย: บาทต่อหน่วยยอดบัญชี',''];
- for(const c of countries){
-  const rows=accounts.filter(x=>x.country===c&&x.age!=='0-1'&&x.stock>0);
-  for(const ageLabel of ['1+','5+','9+']){
-   const group=rows.filter(x=>x.age===({'1+':'1-5','5+':'5-9','9+':'9+'})[ageLabel]);
-   for(const x of group){const rate=(Math.ceil((sell(x)/x.denomination-1e-10)*100)/100).toFixed(2);lines.push(`itunes ${aliases[c]||c.toLowerCase()} ${ageLabel} ${rate} : ${x.denomination}*${x.stock}`);}
-   if(!group.length)lines.push(`itunes ${aliases[c]||c.toLowerCase()} ${ageLabel} :`);
-  }
-  lines.push('');
- }
- $('sales').value=lines.join('\n');
+ $('sales').value=itunesSalesText(state.snapshot.accounts||[],x=>sell(x)/x.denomination);
 }
 function renderCustom(){const x=state?.snapshot?.custom?.[Number($('custom-product').value)];if(!x){$('custom-result').textContent='ยังไม่มีข้อมูล';return;}const amount=Number($('custom-amount').value),min=Number(x.minAmount),max=Number(x.maxAmount),multiple=Number(x.multiple);const hint=`ยอด ${nf.format(min)}–${nf.format(max)}${multiple>0?' · เพิ่มทีละ '+multiple:''}`;if(!amount){$('custom-result').textContent=hint;return;}if(amount<min||amount>max||(multiple>0&&Math.abs(amount/multiple-Math.round(amount/multiple))>1e-7)){$('custom-result').textContent=hint+' · ยอดไม่อยู่ในเงื่อนไข';return;}const cost=(amount*Number(x.cnRate)/Number(x.configRate)*(1+Number(x.premiums[$('custom-level').value]))).toFixed(2),row={...x,paymentUsd:cost};$('custom-result').textContent=`ต้นทุน ${nf.format(money(row))} ${currency()}${sell(row)===null?'':' · ราคาขาย '+nf.format(Math.ceil(sell(row)*100)/100)+' บาท'}`;}
 function changeTab(next){tab=next;page=0;const titles={accounts:'บัญชีพร้อมยอด',recharge:'เติมบัญชี',sales:'ข้อความขาย',setting:'Setting'};$('title').textContent=titles[tab];$('count').hidden=tab==='setting';$('section-title').textContent=tab==='setting'?'กำไรตามสินค้าและประเทศ':tab==='recharge'?'ยอดเติมและช่องทาง · ยอดรอคิวไม่ใช่สต็อก':tab==='sales'?'ข้อความพร้อมคัดลอก':'รายการบัญชี';document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$('sales-view').hidden=tab!=='sales';$('setting-view').hidden=tab!=='setting';$('settings-panel').hidden=tab!=='setting';document.querySelector('.workspace').classList.toggle('setting-mode',tab==='setting');$('table-view').hidden=['sales','setting'].includes(tab);$('filters').hidden=['sales','setting'].includes(tab);$('custom-view').hidden=tab!=='recharge';for(const id of ['type','age'])$(id).hidden=tab!=='accounts';$('stockOnly').parentElement.hidden=tab!=='accounts';renderTable();}
@@ -133,3 +124,8 @@ async function poll(){try{await refresh();}catch(e){error(e);}setTimeout(poll,st
 
 
 $('admin-form').onsubmit=async e=>{e.preventDefault();try{await post('/api/admin',{currentPassword:$('admin-current').value,username:$('admin-name').value,password:$('admin-password').value});$('admin-current').value='';$('admin-password').value='';$('admin-status').textContent='บันทึกแล้ว เมื่อระบบถามให้เข้าสู่ระบบด้วยบัญชีใหม่';}catch(err){$('admin-status').textContent=err.message;}};
+
+$('sales-api-key').onclick=async()=>{if(!confirm('สร้าง API key ใหม่? คีย์เดิมจะใช้ไม่ได้'))return;try{const result=await post('/api/sales-key');$('sales-api-token').value=result.key;$('sales-api-status').textContent='คัดลอกคีย์เก็บไว้ แสดงเฉพาะครั้งนี้ ใช้อ่านข้อความขายเท่านั้น';}catch(err){$('sales-api-status').textContent=err.message;}};
+$('sales-api-url').textContent=location.origin+'/api/sales/itunes';
+
+$('sales-api-copy').onclick=async()=>{try{if(!$('sales-api-token').value)throw new Error('สร้างคีย์ก่อน หรือใช้คีย์ที่คุณเก็บไว้');await navigator.clipboard.writeText($('sales-api-token').value);$('sales-api-status').textContent='คัดลอกคีย์แล้ว';}catch(err){$('sales-api-status').textContent=err.message;}};

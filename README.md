@@ -44,3 +44,22 @@ Production requires DATABASE_URL. Startup stops if the database cannot be loaded
 
 ## Database login
 When DATABASE_URL is configured, login is stored in gamestation_admin with a salted scrypt hash. APP_USERNAME and APP_PASSWORD initialize the account only when the table is empty (minimum password length 5). Set these bootstrap variables before the first deployment. Existing database credentials are never overwritten on restart. Change the username and password in Setting > บัญชีเข้าโปรแกรม using the current password. The next request requires the new Basic Auth credentials. The supplier account remains separate. Never commit real bootstrap credentials.
+
+## iTunes sales text API
+
+Create an API key in Setting > API ข้อความขาย iTunes and copy it immediately. Only its SHA-256 hash is stored in PostgreSQL. Rotating it revokes the old key; deploying does not reset it.
+
+GET /api/sales/itunes
+Authorization: Bearer YOUR_API_KEY
+
+Successful response: HTTP 200, Content-Type: application/json; charset=utf-8, exactly {"text":"..."}. Newlines are JSON-escaped as \n and become line breaks when parsed. The text matches the iTunes account sales copy view, with THB prices rounded upward to two decimals, country-specific 1+/5+/9+ markup, and blank out-of-stock age lines.
+
+This endpoint serves the latest successful stock snapshot and the current usable Bitkub quote; it does not trigger supplier calls. Configure the automatic inventory update interval in Setting. A snapshot can be older if the latest sync failed. No timestamp is appended to the sales text.
+
+Missing/invalid key: 401. Unsupported method: 405. Missing inventory/USDT conversion or expired Bitkub quote: 503 with Retry-After: 30. Error bodies contain an error field, not sales text. API keys only read this endpoint; they cannot access settings, supplier sessions, or admin routes. Intended for server-to-server clients; no cross-origin browser access is enabled.
+
+Example:
+
+```sh
+curl -H "Authorization: Bearer YOUR_API_KEY" https://price-project-production.up.railway.app/api/sales/itunes
+```
