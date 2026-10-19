@@ -63,3 +63,17 @@ test('category-country markups keep Xbox and Razer independent of iTunes',async(
  const {runInNewContext}=await import('node:vm');const source=await readFile(new URL('./app/public/app.js',import.meta.url),'utf8');const settings=validateSettings({fx:33,fee:0,interval:0,countryMarkups:{US:3},categoryCountryMarkups:{'xbox:US':5,'razer:US':0}});const context={state:{settings}};runInNewContext(source.slice(source.indexOf('function markupFor('),source.indexOf('function sell(')),context);assert.equal(context.markupFor({category:'xbox',country:'US'}),5);assert.equal(context.markupFor({category:'razer',country:'US'}),0);assert.equal(context.markupFor({category:'itunes',country:'US'}),3);assert.equal(context.markupFor({category:'xbox',country:'CA'}),2);
  const {normalize}=await import('./normalize-api.mjs');for(const brandId of [4,5]){const n=normalize([{goodsId:81,brandId,type:'Recharge',detail:{name:'Test (USA)',symbol:'$',amounts:[200],cn_rate:5,config_rate:6,is_custom:true,min_amount:10,max_amount:1000,brand_levels:{level_2:0,level_3:0.003,level_4:0.008,level_5:0.015}}}]);assert.equal(n.errors.length,0);assert.equal(n.recharge[0].country,'US');assert.equal(n.recharge[0].category,brandId===4?'razer':'xbox');assert.equal(n.accounts.length,0);assert.equal(n.custom[0].category,n.recharge[0].category);}
 });
+test('iTunes age overrides apply to Whole and Split, preserve zero, and leave recharge unchanged',async()=>{
+ const {runInNewContext}=await import('node:vm');const source=await readFile(new URL('./app/public/app.js',import.meta.url),'utf8');
+ const settings=validateSettings({fx:30,markup:2,fee:0,interval:0,categoryCountryMarkups:{'itunes:US':4},itunesAgeMarkups:{'US:1+':1,'US:5+':0,'US:9+':9}});
+ const context={state:{settings,snapshot:{usdPerUsdt:1}}};runInNewContext(source.slice(source.indexOf('function money('),source.indexOf('function currency(')),context);
+ for(const type of ['Whole','Split'])for(const [age,percent] of [['1-5',1],['5-9',0],['9+',9]]){
+  const row={category:'itunes',country:'US',type,age,paymentUsd:100,denomination:500};assert.equal(context.markupFor(row),percent);assert.ok(Math.abs(context.sell(row)-100*30*1.00251*(1+percent/100))<1e-8);
+ }
+ assert.equal(context.markupFor({country:'US',category:'itunes',type:'Recharge',age:'9+'}),4);
+ assert.equal(context.markupFor({country:'US',category:'xbox',type:'Recharge',age:'9+'}),2);
+ delete settings.itunesAgeMarkups['US:9+'];assert.equal(context.markupFor({country:'US',type:'Whole',age:'9+'}),4);
+ assert.equal(context.markupFor({country:'CA',type:'Whole',age:'9+'}),2);
+ assert.deepEqual(validateSettings(JSON.parse(JSON.stringify(settings))).itunesAgeMarkups,settings.itunesAgeMarkups);
+ for(const map of [{'US:2+':3},{'US:1+':-1},{'US:9+':'3'},{'US:5+':1001}])assert.throws(()=>validateSettings({...settings,itunesAgeMarkups:map}));
+});

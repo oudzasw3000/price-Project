@@ -90,7 +90,7 @@ const server=http.createServer(async(req,res)=>{
       if(route==='/api/admin'){if(!adminAuth){send(res,400,{error:'Database required'});return;}await adminAuth.change(input.currentPassword,input.username,input.password);send(res,200,{ok:true});return;}
       if(route==='/api/sync'){if(job.running){send(res,409,{error:'กำลังอัปเดตอยู่'});return;}void sync();send(res,202,{ok:true});return;}
       if(route==='/api/stop'){controller?.abort();job.message='กำลังหยุดหลังคำขอปัจจุบัน';send(res,200,{ok:true});return;}
-      if(route==='/api/settings'){let next;try{next=await settingsStore.save(input);}catch{send(res,503,{error:'บันทึกการตั้งค่าไม่สำเร็จ กรุณาตรวจค่าหรือการเชื่อมต่อฐานข้อมูลแล้วลองใหม่'});return;}settings=next;if(!job.running)schedule();send(res,200,{ok:true});return;}
+      if(route==='/api/settings'){let next;try{next=await settingsStore.save({...input,itunesAgeMarkups:input.itunesAgeMarkups??settings.itunesAgeMarkups});}catch{send(res,503,{error:'บันทึกการตั้งค่าไม่สำเร็จ กรุณาตรวจค่าหรือการเชื่อมต่อฐานข้อมูลแล้วลองใหม่'});return;}settings=next;if(!job.running)schedule();send(res,200,{ok:true});return;}
       if(route==='/api/account'){
         if(job.running){send(res,409,{error:'หยุดการอัปเดตก่อนเปลี่ยนบัญชี'});return;}
         if(typeof input.email!=='string'||typeof input.password!=='string'||!input.email.trim()||!input.password)throw new Error('กรอกอีเมลและรหัสผ่าน');

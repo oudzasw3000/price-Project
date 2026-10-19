@@ -3,7 +3,7 @@ let state,tab='accounts',page=0,initialized=false,lastSnapshot='',toast='';const
 const names={US:'สหรัฐอเมริกา',UK:'สหราชอาณาจักร',DE:'เยอรมนี',FR:'ฝรั่งเศส',IT:'อิตาลี',ES:'สเปน',GR:'กรีซ',AU:'ออสเตรเลีย',CA:'แคนาดา',JP:'ญี่ปุ่น',TW:'ไต้หวัน',CH:'สวิตเซอร์แลนด์',MX:'เม็กซิโก',TR:'ตุรกี',DK:'เดนมาร์ก',NZ:'นิวซีแลนด์',SE:'สวีเดน',NO:'นอร์เวย์',BR:'บราซิล',NL:'เนเธอร์แลนด์',BE:'เบลเยียม',AT:'ออสเตรีย',PT:'โปรตุเกส',IE:'ไอร์แลนด์',FI:'ฟินแลนด์'};
 const aliases={AU:'aud',CA:'cad',TW:'twd',CH:'chf',MX:'mxn',TR:'try',NO:'nok'};
 function money(row){return Number(row.paymentUsd)/(state.snapshot?.usdPerUsdt||1)}
-function markupFor(row){return state.settings.categoryCountryMarkups?.[(row.category||'itunes')+':'+row.country]??((row.category||'itunes')==='itunes'?state.settings.countryMarkups?.[row.country]:undefined)??state.settings.markup}
+function markupFor(row){const age=({'1-5':'1+','5-9':'5+','9+':'9+'})[row.age];if((row.category||'itunes')==='itunes'&&['Whole','Split'].includes(row.type)&&age){const specific=state.settings.itunesAgeMarkups?.[row.country+':'+age];if(specific!==undefined)return specific;}return state.settings.categoryCountryMarkups?.[(row.category||'itunes')+':'+row.country]??((row.category||'itunes')==='itunes'?state.settings.countryMarkups?.[row.country]:undefined)??state.settings.markup}
 function sell(row){return state.settings.fx>0&&state.snapshot?.usdPerUsdt?money(row)*state.settings.fx*(1+(state.settings.purchaseFee??0.251)/100)*(1+markupFor(row)/100)+state.settings.fee:null}
 function renderEffectiveFx(){
  const base=Number(state?.settings.fx),raw=$('purchaseFee').value,pct=Number(raw);
@@ -27,7 +27,7 @@ function render(){
  $('sync').disabled=state.job.running;$('sync').textContent=state.job.running?'กำลังอัปเดต…':'↻ อัปเดตข้อมูล';$('stop').hidden=!state.job.running;
  $('notice').textContent=toast||state.job.error||(snap?.imported?'กำลังแสดงข้อมูลจากการทดสอบก่อนหน้า กดอัปเดตเพื่อดึงข้อมูลใหม่':'')||snap?.rateWarning||(!state.account.configured?'เชื่อมต่อบัญชีเพื่อเริ่มดึงข้อมูล':'');
  $('rate').textContent=snap?.usdPerUsdt?`เรตจากระบบ: 1 USDT = ${snap.usdPerUsdt} USD`:'ยังไม่ยืนยันเรต USDT · แสดงต้นทุน USD';
- if(!initialized){for(const key of ['fx','purchaseFee','markup','fee','interval'])$(key).value=state.settings[key]|| (key==='fx'?'':0);draftCountries={...state.settings.categoryCountryMarkups};for(const [c,n]of Object.entries(state.settings.countryMarkups||{}))draftCountries['itunes:'+c]??=n;renderMarkupOptions();initialized=true;}
+ if(!initialized){for(const key of ['fx','purchaseFee','markup','fee','interval'])$(key).value=state.settings[key]|| (key==='fx'?'':0);draftAges={...state.settings.itunesAgeMarkups};draftCountries={...state.settings.categoryCountryMarkups};for(const [c,n]of Object.entries(state.settings.countryMarkups||{}))draftCountries['itunes:'+c]??=n;renderMarkupOptions();initialized=true;}
  const key=JSON.stringify([snap?.updatedAt,snap?.products]);if(lastSnapshot!==key){lastSnapshot=key;renderMarkupOptions();fillSelect('country',[['','ทุกประเทศ'],...countries.map(c=>[c,`${c} · ${names[c]||c}`])]);fillSelect('custom-product',(snap?.custom||[]).map((x,i)=>({x,i})).filter(({x})=>x.type==='Recharge'&&(!$('category').value||(x.category||'itunes')===$('category').value)).map(({x,i})=>[String(i),x.label]));}
  $('fx').value=state.settings.fx||'';renderEffectiveFx();const market=state.market;$('market-rate').textContent=market?.usable?`Bitkub ${market.price} บาท · รวมค่าเผื่อ ${(market.price*(1+state.settings.purchaseFee/100)).toFixed(6)} บาท/USDT${market.error?' · '+market.error:''}`:(market?.error||'กำลังดึงเรท Bitkub')+' · รอเรทใหม่ก่อนคำนวณราคาขาย';
  renderTable();renderSales();renderCustom();renderMarkupOptions();
@@ -94,26 +94,36 @@ function changeTab(next){tab=next;page=0;const titles={accounts:'บัญชี
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>changeTab(b.dataset.tab));for(const id of ['search','country','category','type','age','stockOnly'])$(id).addEventListener('input',()=>{page=0;lastSnapshot='';render();});$('prev').onclick=()=>{page--;renderTable();};$('next').onclick=()=>{page++;renderTable();};for(const id of ['custom-product','custom-amount','custom-level'])$(id).addEventListener('input',renderCustom);
 function openLogin(){$('email').value=state?.account.email||'';$('login').showModal();}
  $('account').onclick=openLogin;$('close-login').onclick=()=>$('login').close();$('sync').onclick=async()=>{if(!state.account.configured){openLogin();return;}try{toast='';await post('/api/sync');await refresh();}catch(e){error(e);}};$('stop').onclick=async()=>{try{await post('/api/stop');await refresh();}catch(e){error(e);}};
- $('settings').onsubmit=async e=>{e.preventDefault();try{await post('/api/settings',{...Object.fromEntries(['fx','purchaseFee','markup','fee','interval'].map(k=>[k,Number($(k).value)])),countryMarkups:{},productMarkups:{},categoryCountryMarkups:draftCountries});toast='';await refresh();$('setting-status').textContent='บันทึกการตั้งค่าแล้ว';}catch(err){error(err);}};
+ $('settings').onsubmit=async e=>{e.preventDefault();try{await post('/api/settings',{...Object.fromEntries(['fx','purchaseFee','markup','fee','interval'].map(k=>[k,Number($(k).value)])),countryMarkups:{},productMarkups:{},categoryCountryMarkups:draftCountries,itunesAgeMarkups:draftAges});toast='';await refresh();$('setting-status').textContent='บันทึกการตั้งค่าแล้ว';}catch(err){error(err);}};
  $('login-form').onsubmit=async e=>{e.preventDefault();try{await post('/api/account',{email:$('email').value,password:$('password').value,remember:$('remember').checked});$('password').value='';$('login').close();toast='';await refresh();}catch(err){$('login-error').textContent=err.message;}};
  $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('sales').value);$('copy').textContent='คัดลอกแล้ว';setTimeout(()=>$('copy').textContent='คัดลอกข้อความขาย',1800);}catch{$('sales').select();toast='เลือกข้อความไว้แล้ว กด Ctrl+C เพื่อคัดลอก';render();}};
 async function refresh(){const r=await fetch('/api/state');if(!r.ok)throw new Error('ติดต่อโปรแกรมไม่ได้');state=await r.json();render();}
-let draftCountries={};
+let draftCountries={},draftAges={};
 function markupRows(){return [...(state.snapshot?.accounts||[]),...(state.snapshot?.recharge||[]),...(state.snapshot?.custom||[])];}
 let settingTableKey='';
 function renderMarkupOptions(){
- const keys=[...new Set([...markupRows().map(x=>(x.category||'itunes')+':'+x.country),...Object.keys(draftCountries)])].sort();
- const stamp=JSON.stringify([keys,state.settings.categoryCountryMarkups,state.settings.countryMarkups,state.settings.markup]);
+ const keys=[...new Set([...markupRows().map(x=>(x.category||'itunes')+':'+x.country),...Object.keys(draftCountries),...Object.keys(draftAges).map(k=>'itunes:'+k.split(':')[0])])].sort();
+ const stamp=JSON.stringify([keys,state.settings.categoryCountryMarkups,state.settings.countryMarkups,state.settings.itunesAgeMarkups,state.settings.markup]);
  if(stamp===settingTableKey)return;settingTableKey=stamp;
  $('setting-rows').replaceChildren();
  for(const key of keys){
   const [category,country]=key.split(':');const tr=document.createElement('tr');
   cell(tr,({itunes:'iTunes',xbox:'Xbox',razer:'Razer'})[category]||category);cell(tr,country+' · '+(names[country]||country));
   const saved=state.settings.categoryCountryMarkups?.[key]??(category==='itunes'?state.settings.countryMarkups?.[country]:undefined);
-  cell(tr,(saved??state.settings.markup)+'%'+(saved===undefined?' (กำไรหลัก)':''));
-  const td=cell(tr,'');const input=document.createElement('input');input.type='number';input.min='0';input.max='1000';input.step='any';input.setAttribute('form','settings');input.setAttribute('aria-label','กำไร '+category+' '+country);input.placeholder='ใช้กำไรหลัก';input.value=draftCountries[key]??'';td.append(input);
-  const status=cell(tr,'');const update=()=>{const value=input.value===''?undefined:Number(input.value);status.textContent=value!==saved?'ยังไม่บันทึก':saved===undefined?'ใช้กำไรหลัก':'ตั้งไว้แล้ว';};update();
-  input.oninput=()=>{if(input.value==='')delete draftCountries[key];else draftCountries[key]=Number(input.value);update();$('setting-status').textContent='มีการแก้ไข กดบันทึกการตั้งค่าทั้งหมด';};
+  const base=saved??state.settings.markup;cell(tr,base+'%');
+  const checks=[];
+  function addInput(map,id,stored,label,fallback){
+   const td=cell(tr,'');const input=document.createElement('input');input.type='number';input.min='0';input.max='1000';input.step='any';input.setAttribute('form','settings');input.setAttribute('aria-label',label);input.placeholder='ใช้ '+fallback+'%';input.value=map[id]??'';td.append(input);
+   const note=document.createElement('small');note.textContent='บันทึก: '+(stored??fallback)+'%'+(stored===undefined?' (ตามค่าพื้นฐาน)':'');td.append(note);
+   checks.push(()=>map[id]!==stored);
+   input.oninput=()=>{if(input.value==='')delete map[id];else map[id]=Number(input.value);update();$('setting-status').textContent='มีการแก้ไข กดบันทึกการตั้งค่าทั้งหมด';};
+  }
+  addInput(draftCountries,key,saved,'กำไร '+category+' '+country,state.settings.markup);
+  for(const age of ['1+','5+','9+']){
+   if(category==='itunes')addInput(draftAges,country+':'+age,state.settings.itunesAgeMarkups?.[country+':'+age],'กำไร iTunes '+country+' '+age,base);
+   else cell(tr,'—');
+  }
+  const status=cell(tr,'');function update(){status.textContent=checks.some(check=>check())?'ยังไม่บันทึก':'บันทึกแล้ว';}update();
   $('setting-rows').append(tr);
  }
 }
