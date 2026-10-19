@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {SourceStore,combineSources,PRODUCTS} from './sources.mjs';
 import {SalesKeyStore,salesResponse} from './sales-api.mjs';
 import {AuthStore} from './auth-store.mjs';
 import {createSettingsStore} from './settings-store.mjs';
@@ -26,6 +27,9 @@ const adminAuth=settingsStore.pool?new AuthStore(settingsStore.pool):null;
 if(adminAuth)await adminAuth.load();
 const salesKeys=settingsStore.pool?new SalesKeyStore(settingsStore.pool):null;
 if(salesKeys)await salesKeys.load();
+const sourceStore=settingsStore.pool?new SourceStore(settingsStore.pool):null;
+if(sourceStore)await sourceStore.load();
+async function inventory(){return combineSources(snapshot,sourceStore?await sourceStore.list():[]);}
 let snapshot=null;try{snapshot=JSON.parse(await readFile(path.join(local,'snapshot.json'),'utf8'));}catch{}
 if(!snapshot){
   const dirs=(await readdir(path.join(root,'captures')).catch(()=>[])).filter(x=>x.startsWith('api-')).sort().reverse();
@@ -41,7 +45,7 @@ const client=new PromosClient({session:vault.session||{},credentials:vault.crede
   await saveVault(vaultFile,{remember:vault.remember!==false,session:client.session,credentials:vault.remember===false?{}:client.credentials});
 }});
 if(bootEmail&&bootPassword)await client.persist();
-function publicState(){const market=marketRate.state();return {settings:{...settings,fx:market.usable?market.price:0},market,snapshot,job,nextRun,account:{email:client.credentials.email||vault.email||'',configured:!!client.credentials.password||!!client.session.token,hasSession:!!client.session.token,remember:vault.remember!==false}};}
+async function publicState(){const market=marketRate.state();return {settings:{...settings,fx:market.usable?market.price:0},market,snapshot:await inventory(),job,nextRun,account:{email:client.credentials.email||vault.email||'',configured:!!client.credentials.password||!!client.session.token,hasSession:!!client.session.token,remember:vault.remember!==false}};}
 function schedule(){clearTimeout(timer);timer=null;nextRun=null;if(settings.interval>0){nextRun=new Date(Date.now()+settings.interval*60000).toISOString();timer=setTimeout(()=>{if(!job.running)void sync();},settings.interval*60000);timer.unref();}}
 async function sync(){
   if(job.running)return;
@@ -75,26 +79,37 @@ async function sync(){
 }
 const {port,origin}=hosting;
 const files={'/sales-text.js':['sales-text.js','text/javascript; charset=utf-8'],'/':['index.html','text/html; charset=utf-8'],'/app.js':['app.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8']};
-async function body(req){let text='';for await(const chunk of req){text+=chunk;if(text.length>16000)throw new Error('Request too large');}return JSON.parse(text||'{}');}
+async function body(req,limit=16000){const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>limit)throw new Error('Request too large');chunks.push(chunk);}return JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}');}
 function send(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));}
 const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
   res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'");
   if(req.method==='GET'&&req.url==='/healthz'){send(res,200,{ok:true});return;}
   if(!hosting.hosts.includes(req.headers.host)){send(res,403,{error:'Invalid host'});return;}
-  if(new URL(req.url,origin).pathname==='/api/sales/itunes'){
+  const requestUrl=new URL(req.url,origin),salesMatch=requestUrl.pathname.match(/^\/api\/sales\/([a-z-]+)$/),feedMatch=requestUrl.pathname.match(/^\/api\/sources\/([a-z][a-z0-9-]{1,39})\/inventory$/);
+  if(feedMatch){
+    if(req.method!=='PUT'){res.setHeader('Allow','PUT');send(res,405,{error:'Method not allowed'});return;}
+    try{if(!sourceStore||!await sourceStore.authorized(feedMatch[1],req.headers.authorization)){send(res,401,{error:'Source Bearer key required'});return;}}catch{send(res,503,{error:'Database unavailable'});return;}
+    if(!req.headers['content-type']?.startsWith('application/json')){send(res,415,{error:'Use application/json'});return;}
+    let input;try{input=await body(req,1000000);}catch{send(res,400,{error:'Invalid JSON or payload too large'});return;}
+    try{send(res,200,await sourceStore.replace(feedMatch[1],input));}catch{send(res,400,{error:'Invalid feed or database unavailable; previous data retained'});}return;
+  }
+  if(salesMatch){
+    if(![...PRODUCTS,'itunes-recharge'].includes(salesMatch[1])){send(res,404,{error:'Unknown product'});return;}
     if(req.method!=='GET'){res.setHeader('Allow','GET');send(res,405,{error:'Method not allowed'});return;}
     try{if(!salesKeys||!await salesKeys.authorized(req.headers.authorization)){send(res,401,{error:'Valid Bearer API key required'});return;}}catch{send(res,503,{error:'API authentication unavailable'});return;}
-    try{send(res,200,salesResponse(snapshot,settings,marketRate.state()));}catch{res.setHeader('Retry-After','30');send(res,503,{error:'Sales data or exchange rate is not ready'});}return;
+    try{send(res,200,salesResponse(await inventory(),settings,marketRate.state(),salesMatch[1],requestUrl.searchParams.get('source')));}catch{res.setHeader('Retry-After','30');send(res,503,{error:'Sales data or exchange rate is not ready'});}return;
   }
   let access=false;try{access=adminAuth?await adminAuth.authorized(req.headers.authorization):authorized(req.headers.authorization);}catch{send(res,503,{error:'Authentication database unavailable'});return;}
   if(!access){res.setHeader('WWW-Authenticate','Basic realm="Gamestation Rate", charset="UTF-8"');send(res,401,{error:'Authentication required'});return;}
   try{
     const url=new URL(req.url,origin),route=url.pathname;
-    if(req.method==='GET'&&route==='/api/state'){send(res,200,publicState());return;}
+    if(req.method==='GET'&&route==='/api/state'){send(res,200,await publicState());return;}
     if(req.method==='POST'){
       if(!hosting.origins.includes(req.headers.origin)||!req.headers['content-type']?.startsWith('application/json')){send(res,403,{error:'Invalid origin'});return;}
       const input=await body(req);
+      if(route==='/api/sources'){if(!sourceStore){send(res,503,{error:'Database required'});return;}send(res,201,await sourceStore.create(input.id,input.name));return;}
+      if(route==='/api/sources/rotate'){if(!sourceStore){send(res,503,{error:'Database required'});return;}send(res,200,await sourceStore.rotate(input.id));return;}
       if(route==='/api/sales-key'){if(!salesKeys){send(res,503,{error:'Database required'});return;}send(res,200,{key:await salesKeys.rotate()});return;}
       if(route==='/api/admin'){if(!adminAuth){send(res,400,{error:'Database required'});return;}await adminAuth.change(input.currentPassword,input.username,input.password);send(res,200,{ok:true});return;}
       if(route==='/api/sync'){if(job.running){send(res,409,{error:'กำลังอัปเดตอยู่'});return;}void sync();send(res,202,{ok:true});return;}

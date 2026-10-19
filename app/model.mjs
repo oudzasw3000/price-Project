@@ -10,7 +10,7 @@ export function validateSettings(value){
     if(!map||typeof map!=='object'||Array.isArray(map))throw new Error('Invalid '+key);
     result[key]={};
     for(const [id,n] of Object.entries(map)){
-      if(!(key==='itunesAgeMarkups'?/^[A-Z]{2,8}:(1|5|9)\+$/:key==='countryMarkups'?/^[A-Z]{2,8}$/:key==='categoryCountryMarkups'?/^(itunes|xbox|razer):[A-Z]{2,8}$/:/^[0-9]+$/).test(id)||typeof n!=='number'||!Number.isFinite(n)||n<0||n>1000)throw new Error('Invalid '+key);
+      if(!(key==='itunesAgeMarkups'?/^[A-Z]{2,8}:(1|5|9)\+$/:key==='countryMarkups'?/^[A-Z]{2,8}$/:key==='categoryCountryMarkups'?/^(itunes|xbox|razer|mycard):[A-Z]{2,8}$/:/^[0-9]+$/).test(id)||typeof n!=='number'||!Number.isFinite(n)||n<0||n>1000)throw new Error('Invalid '+key);
       result[key][id]=n;
     }
   }

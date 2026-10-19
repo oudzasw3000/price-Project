@@ -47,7 +47,7 @@ When DATABASE_URL is configured, login is stored in gamestation_admin with a sal
 
 ## iTunes sales text API
 
-Create an API key in Setting > API ข้อความขาย iTunes and copy it immediately. Only its SHA-256 hash is stored in PostgreSQL. Rotating it revokes the old key; deploying does not reset it.
+Create an API key in Setting > API ข้อความขายแยกสินค้า and copy it immediately. Only its SHA-256 hash is stored in PostgreSQL. Rotating it revokes the old key; deploying does not reset it.
 
 GET /api/sales/itunes
 Authorization: Bearer YOUR_API_KEY
@@ -56,10 +56,21 @@ Successful response: HTTP 200, Content-Type: application/json; charset=utf-8, ex
 
 This endpoint serves the latest successful stock snapshot and the current usable Bitkub quote; it does not trigger supplier calls. Configure the automatic inventory update interval in Setting. A snapshot can be older if the latest sync failed. No timestamp is appended to the sales text.
 
-Missing/invalid key: 401. Unsupported method: 405. Missing inventory/USDT conversion or expired Bitkub quote: 503 with Retry-After: 30. Error bodies contain an error field, not sales text. API keys only read this endpoint; they cannot access settings, supplier sessions, or admin routes. Intended for server-to-server clients; no cross-origin browser access is enabled.
+Missing/invalid key: 401. Unsupported method: 405. Missing inventory/USDT conversion or expired Bitkub quote: 503 with Retry-After: 30. Error bodies contain an error field, not sales text. Sales API keys only read the sales endpoints; they cannot access settings, supplier sessions, or admin routes. Intended for server-to-server clients; no cross-origin browser access is enabled.
 
 Example:
 
 ```sh
 curl -H "Authorization: Bearer YOUR_API_KEY" https://price-project-production.up.railway.app/api/sales/itunes
 ```
+
+
+## Multiple suppliers and external inventory
+
+See [EXTERNAL-API.md](EXTERNAL-API.md) for the input contract and examples.
+
+The existing supplier adapter remains independently synced. External sources are push-fed and persisted in PostgreSQL (`gamestation_sources`). Inventory rows carry sourceId and their own USD/USDT conversion, so a supplier conversion never changes another supplier's cost. Settings remain per product/country (plus iTunes age), shared across suppliers. Supplier credentials are not part of inventory feeds.
+
+Sales endpoints: `/api/sales/itunes`, `/api/sales/itunes-recharge`, `/api/sales/xbox`, `/api/sales/razer`, `/api/sales/mycard`. The existing sales key reads all of these. Optional `?source=supplier-a` selects one source (`promo` selects the original supplier). Unknown/unavailable product inventory returns 503; unknown product routes return 404. Output stays exactly `{ "text": "..." }`. A new product requires registering its slug in PRODUCTS, the settings validator and UI selectors.
+
+External data expires at expiresAt and is excluded from inventory and sales after expiry. Original supplier snapshots retain the existing last-successful-sync behavior. The UI source selector supports both inventory and sales. Multiple-source account/card entries remain separate; we do not sum their stocks or assume duplicate offers are separate stock. Identical recharge sale lines are deduplicated. No automatic cheapest-supplier selection is enabled. Additional website scraping/login adapters are not included until their API contracts are known.
