@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {createSettingsStore} from './settings-store.mjs';
 import {hostingConfig,authorized} from './hosting.mjs';
 const hosting=hostingConfig();
 import {BitkubRate} from './bitkub.mjs';
@@ -17,8 +18,8 @@ let vault={},vaultError='';try{vault=await loadVault(vaultFile);}catch{vaultErro
 const bootEmail=process.env.PROMO_EMAIL,bootPassword=process.env.PROMO_PASSWORD;
 delete process.env.PROMO_EMAIL;delete process.env.PROMO_PASSWORD;
 if(bootEmail&&bootPassword){vault.credentials={email:bootEmail,password:bootPassword};vault.remember=true;}
-let settings={fx:0,purchaseFee:0.251,markup:2,fee:0,interval:0};
-try{settings=validateSettings(JSON.parse(await readFile(path.join(local,'settings.json'),'utf8')));}catch{}
+const settingsStore=createSettingsStore(path.join(local,'settings.json'));
+let settings;try{settings=await settingsStore.load();}catch{await settingsStore.close();throw new Error('Cannot load settings database. Check DATABASE_URL and existing settings; startup aborted.');}
 let snapshot=null;try{snapshot=JSON.parse(await readFile(path.join(local,'snapshot.json'),'utf8'));}catch{}
 if(!snapshot){
   const dirs=(await readdir(path.join(root,'captures')).catch(()=>[])).filter(x=>x.startsWith('api-')).sort().reverse();
@@ -84,7 +85,7 @@ const server=http.createServer(async(req,res)=>{
       const input=await body(req);
       if(route==='/api/sync'){if(job.running){send(res,409,{error:'กำลังอัปเดตอยู่'});return;}void sync();send(res,202,{ok:true});return;}
       if(route==='/api/stop'){controller?.abort();job.message='กำลังหยุดหลังคำขอปัจจุบัน';send(res,200,{ok:true});return;}
-      if(route==='/api/settings'){settings=validateSettings(input);await atomicWrite(path.join(local,'settings.json'),JSON.stringify(settings));if(!job.running)schedule();send(res,200,{ok:true});return;}
+      if(route==='/api/settings'){let next;try{next=await settingsStore.save(input);}catch{send(res,503,{error:'บันทึกการตั้งค่าไม่สำเร็จ กรุณาตรวจค่าหรือการเชื่อมต่อฐานข้อมูลแล้วลองใหม่'});return;}settings=next;if(!job.running)schedule();send(res,200,{ok:true});return;}
       if(route==='/api/account'){
         if(job.running){send(res,409,{error:'หยุดการอัปเดตก่อนเปลี่ยนบัญชี'});return;}
         if(typeof input.email!=='string'||typeof input.password!=='string'||!input.email.trim()||!input.password)throw new Error('กรอกอีเมลและรหัสผ่าน');
