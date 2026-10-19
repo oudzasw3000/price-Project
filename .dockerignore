@@ -1,0 +1,8 @@
+.git
+node_modules
+.local
+data
+captures
+.env
+.env.*
+*.log

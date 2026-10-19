@@ -1,0 +1,13 @@
+{
+  "name": "gamestation-rate",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node app/server.mjs",
+    "test": "node --test tests.mjs protocol-tests.mjs app-tests.mjs hosting-tests.mjs"
+  }
+}

@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomBytes} from 'node:crypto';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import os from 'node:os';import path from 'node:path';
+import {hostingConfig,authorized} from './app/hosting.mjs';
+import {saveVault,loadVault} from './app/vault.mjs';
+const env={NODE_ENV:'production',PUBLIC_URL:'https://test.up.railway.app',APP_USERNAME:'admin',APP_PASSWORD:'test-password-long-enough',VAULT_KEY:'a'.repeat(64),DATA_DIR:'/data'};
+test('cloud fails closed and only accepts configured origin',()=>{assert.equal(hostingConfig(env).host,'0.0.0.0');assert.deepEqual(hostingConfig(env).origins,[env.PUBLIC_URL]);for(const key of ['PUBLIC_URL','APP_PASSWORD','VAULT_KEY','DATA_DIR'])assert.throws(()=>hostingConfig({...env,[key]:''}));assert.equal(authorized(undefined,env),false);assert.equal(authorized('Basic '+Buffer.from('admin:wrong').toString('base64'),env),false);assert.equal(authorized('Basic '+Buffer.from('admin:'+env.APP_PASSWORD).toString('base64'),env),true);});
+test('portable vault encrypts, restores, and rejects wrong keys',async()=>{const old=process.env.VAULT_KEY;const dir=await mkdtemp(path.join(os.tmpdir(),'cloud-vault-'));try{process.env.VAULT_KEY=randomBytes(32).toString('hex');const f=path.join(dir,'vault');const value={credentials:{password:'fixture-secret'},session:{token:'fixture-token'}};await saveVault(f,value);assert.deepEqual(await loadVault(f),value);assert.ok(!(await readFile(f,'utf8')).includes('fixture-secret'));process.env.VAULT_KEY=randomBytes(32).toString('hex');await assert.rejects(loadVault(f));}finally{if(old===undefined)delete process.env.VAULT_KEY;else process.env.VAULT_KEY=old;await rm(dir,{recursive:true,force:true});}});

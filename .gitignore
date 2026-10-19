@@ -1,0 +1,11 @@
+node_modules/
+.local/
+data/
+captures/
+.env
+.env.*
+!.env.example
+*.har
+*.log
+*.dpapi
+*.aes
