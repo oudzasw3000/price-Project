@@ -74,3 +74,14 @@ The existing supplier adapter remains independently synced. External sources are
 Sales endpoints: `/api/sales/itunes`, `/api/sales/itunes-recharge`, `/api/sales/xbox`, `/api/sales/razer`, `/api/sales/mycard`. The existing sales key reads all of these. Optional `?source=supplier-a` selects one source (`promo` selects the original supplier). Unknown/unavailable product inventory returns 503; unknown product routes return 404. Output stays exactly `{ "text": "..." }`. A new product requires registering its slug in PRODUCTS, the settings validator and UI selectors.
 
 External data expires at expiresAt and is excluded from inventory and sales after expiry. Original supplier snapshots retain the existing last-successful-sync behavior. The UI source selector supports both inventory and sales. Multiple-source account/card entries remain separate; we do not sum their stocks or assume duplicate offers are separate stock. Identical recharge sale lines are deduplicated. No automatic cheapest-supplier selection is enabled. Additional website scraping/login adapters are not included until their API contracts are known.
+
+
+## Stock and recharge separation
+
+Each product (itunes, xbox, razer, mycard) supports GET `/api/sales/{product}/stock` and `/api/sales/{product}/recharge`, with the same sales Bearer key and optional `?source=...`. Stock returns only accounts/cards with stock quantities; recharge returns only top-up rates. JSON stays `{ "text": "..." }`. An unavailable type returns 503 without falling back to the other type.
+
+Legacy URLs remain unchanged: `/api/sales/itunes` is stock, `/api/sales/itunes-recharge` is recharge, and the old xbox/razer/mycard URLs retain their combined output. Country codes (including US/us) and four-significant-digit rounding are unchanged.
+
+Setting now includes independent stock/recharge markup per product and country, stored in `fulfillmentMarkups` (example keys `xbox:US:stock`, `xbox:US:recharge`). Blank inherits the previous category/country markup, then legacy iTunes country markup, then global markup; zero is a valid override. iTunes stock age overrides 1+/5+/9+ take precedence over stock markup. Existing saved settings are not reset. Old clients omitting fulfillmentMarkups preserve the saved map.
+
+External input contract stays the same: kind=account or card maps to stock; kind=recharge maps to recharge. No external feed migration is needed.

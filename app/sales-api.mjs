@@ -15,16 +15,17 @@ export class SalesKeyStore{
     return !!rows[0]&&timingSafeEqual(Buffer.from(digest(header.slice(7)),'hex'),Buffer.from(rows[0].token_hash,'hex'));
   }
 }
-export function salesResponse(snapshot,settings,market,product='itunes',source){
+export function salesResponse(snapshot,settings,market,product='itunes',source,kind){
   if(!snapshot?.updatedAt||!Array.isArray(snapshot.accounts)||!market?.usable||!(market.price>0))throw new Error('Sales data or exchange rate is not ready');
-  const selected=source?{...snapshot,accounts:snapshot.accounts.filter(x=>x.sourceId===source),recharge:(snapshot.recharge||[]).filter(x=>x.sourceId===source)}:snapshot;
+  const selected=source?{...snapshot,accounts:snapshot.accounts.filter(x=>x.sourceId===source),recharge:(snapshot.recharge||[]).filter(x=>x.sourceId===source)}:{...snapshot};
+  if(kind){if(!['stock','recharge'].includes(kind))throw new Error('Unknown fulfillment');if(kind==='stock')selected.recharge=[];else selected.accounts=[];}
   const category=product==='itunes-recharge'?'itunes':product;
-  if(!(product==='itunes'?selected.accounts:[...(selected.recharge||[]),...(product==='itunes-recharge'?[]:selected.accounts)]).some(x=>(x.category||'itunes')===category))throw new Error('Product not ready');
+  if(!(kind==='recharge'?selected.recharge:kind==='stock'?selected.accounts:product==='itunes'?selected.accounts:[...(selected.recharge||[]),...(product==='itunes-recharge'?[]:selected.accounts)]).some(x=>(x.category||'itunes')===category))throw new Error('Product not ready');
   return {text:productSalesText(selected,product,row=>{
     const rate=row.usdPerUsdt??snapshot.usdPerUsdt;if(!(rate>0))throw new Error('Source rate not ready');
     const cat=row.category||'itunes';
     const age=({'1-5':'1+','5-9':'5+','9+':'9+'})[row.age];
-    const markup=(cat==='itunes'&&['Whole','Split'].includes(row.type)&&age?settings.itunesAgeMarkups?.[row.country+':'+age]:undefined)??settings.categoryCountryMarkups?.[cat+':'+row.country]??(cat==='itunes'?settings.countryMarkups?.[row.country]:undefined)??settings.markup;
+    const markup=(cat==='itunes'&&['Whole','Split'].includes(row.type)&&age?settings.itunesAgeMarkups?.[row.country+':'+age]:undefined)??settings.fulfillmentMarkups?.[cat+':'+row.country+':'+(row.type==='Recharge'?'recharge':'stock')]??settings.categoryCountryMarkups?.[cat+':'+row.country]??(cat==='itunes'?settings.countryMarkups?.[row.country]:undefined)??settings.markup;
     return (Number(row.paymentUsd)/rate*market.price*(1+(settings.purchaseFee??0.251)/100)*(1+markup/100)+settings.fee)/row.denomination;
-  })};
+  },kind)};
 }

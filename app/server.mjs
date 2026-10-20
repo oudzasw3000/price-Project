@@ -86,7 +86,7 @@ const server=http.createServer(async(req,res)=>{
   res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'");
   if(req.method==='GET'&&req.url==='/healthz'){send(res,200,{ok:true});return;}
   if(!hosting.hosts.includes(req.headers.host)){send(res,403,{error:'Invalid host'});return;}
-  const requestUrl=new URL(req.url,origin),salesMatch=requestUrl.pathname.match(/^\/api\/sales\/([a-z-]+)$/),feedMatch=requestUrl.pathname.match(/^\/api\/sources\/([a-z][a-z0-9-]{1,39})\/inventory$/);
+  const requestUrl=new URL(req.url,origin),salesMatch=requestUrl.pathname.match(/^\/api\/sales\/([a-z-]+)(?:\/(stock|recharge))?$/),feedMatch=requestUrl.pathname.match(/^\/api\/sources\/([a-z][a-z0-9-]{1,39})\/inventory$/);
   if(feedMatch){
     if(req.method!=='PUT'){res.setHeader('Allow','PUT');send(res,405,{error:'Method not allowed'});return;}
     try{if(!sourceStore||!await sourceStore.authorized(feedMatch[1],req.headers.authorization)){send(res,401,{error:'Source Bearer key required'});return;}}catch{send(res,503,{error:'Database unavailable'});return;}
@@ -98,7 +98,7 @@ const server=http.createServer(async(req,res)=>{
     if(![...PRODUCTS,'itunes-recharge'].includes(salesMatch[1])){send(res,404,{error:'Unknown product'});return;}
     if(req.method!=='GET'){res.setHeader('Allow','GET');send(res,405,{error:'Method not allowed'});return;}
     try{if(!salesKeys||!await salesKeys.authorized(req.headers.authorization)){send(res,401,{error:'Valid Bearer API key required'});return;}}catch{send(res,503,{error:'API authentication unavailable'});return;}
-    try{send(res,200,salesResponse(await inventory(),settings,marketRate.state(),salesMatch[1],requestUrl.searchParams.get('source')));}catch{res.setHeader('Retry-After','30');send(res,503,{error:'Sales data or exchange rate is not ready'});}return;
+    try{send(res,200,salesResponse(await inventory(),settings,marketRate.state(),salesMatch[1],requestUrl.searchParams.get('source'),salesMatch[2]));}catch{res.setHeader('Retry-After','30');send(res,503,{error:'Sales data or exchange rate is not ready'});}return;
   }
   let access=false;try{access=adminAuth?await adminAuth.authorized(req.headers.authorization):authorized(req.headers.authorization);}catch{send(res,503,{error:'Authentication database unavailable'});return;}
   if(!access){res.setHeader('WWW-Authenticate','Basic realm="Gamestation Rate", charset="UTF-8"');send(res,401,{error:'Authentication required'});return;}
@@ -114,7 +114,7 @@ const server=http.createServer(async(req,res)=>{
       if(route==='/api/admin'){if(!adminAuth){send(res,400,{error:'Database required'});return;}await adminAuth.change(input.currentPassword,input.username,input.password);send(res,200,{ok:true});return;}
       if(route==='/api/sync'){if(job.running){send(res,409,{error:'กำลังอัปเดตอยู่'});return;}void sync();send(res,202,{ok:true});return;}
       if(route==='/api/stop'){controller?.abort();job.message='กำลังหยุดหลังคำขอปัจจุบัน';send(res,200,{ok:true});return;}
-      if(route==='/api/settings'){let next;try{next=await settingsStore.save({...input,itunesAgeMarkups:input.itunesAgeMarkups??settings.itunesAgeMarkups});}catch{send(res,503,{error:'บันทึกการตั้งค่าไม่สำเร็จ กรุณาตรวจค่าหรือการเชื่อมต่อฐานข้อมูลแล้วลองใหม่'});return;}settings=next;if(!job.running)schedule();send(res,200,{ok:true});return;}
+      if(route==='/api/settings'){let next;try{next=await settingsStore.save({...input,itunesAgeMarkups:input.itunesAgeMarkups??settings.itunesAgeMarkups,fulfillmentMarkups:input.fulfillmentMarkups??settings.fulfillmentMarkups});}catch{send(res,503,{error:'บันทึกการตั้งค่าไม่สำเร็จ กรุณาตรวจค่าหรือการเชื่อมต่อฐานข้อมูลแล้วลองใหม่'});return;}settings=next;if(!job.running)schedule();send(res,200,{ok:true});return;}
       if(route==='/api/account'){
         if(job.running){send(res,409,{error:'หยุดการอัปเดตก่อนเปลี่ยนบัญชี'});return;}
         if(typeof input.email!=='string'||typeof input.password!=='string'||!input.email.trim()||!input.password)throw new Error('กรอกอีเมลและรหัสผ่าน');

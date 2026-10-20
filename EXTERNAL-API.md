@@ -97,3 +97,14 @@ const response = await fetch(`${base}/api/sources/supplier-a/inventory`, {
 });
 if (!response.ok) throw new Error(`Inventory upload failed: ${response.status}`);
 ```
+
+
+## Stock and recharge separation
+
+Each product (itunes, xbox, razer, mycard) supports GET `/api/sales/{product}/stock` and `/api/sales/{product}/recharge`, with the same sales Bearer key and optional `?source=...`. Stock returns only accounts/cards with stock quantities; recharge returns only top-up rates. JSON stays `{ "text": "..." }`. An unavailable type returns 503 without falling back to the other type.
+
+Legacy URLs remain unchanged: `/api/sales/itunes` is stock, `/api/sales/itunes-recharge` is recharge, and the old xbox/razer/mycard URLs retain their combined output. Country codes (including US/us) and four-significant-digit rounding are unchanged.
+
+Setting now includes independent stock/recharge markup per product and country, stored in `fulfillmentMarkups` (example keys `xbox:US:stock`, `xbox:US:recharge`). Blank inherits the previous category/country markup, then legacy iTunes country markup, then global markup; zero is a valid override. iTunes stock age overrides 1+/5+/9+ take precedence over stock markup. Existing saved settings are not reset. Old clients omitting fulfillmentMarkups preserve the saved map.
+
+External input contract stays the same: kind=account or card maps to stock; kind=recharge maps to recharge. No external feed migration is needed.

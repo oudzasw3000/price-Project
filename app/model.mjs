@@ -5,12 +5,12 @@ export function validateSettings(value){
     const n=Number(value[key]);if(!Number.isFinite(n)||n<min||n>max)throw new Error('ค่าตั้งค่าไม่ถูกต้อง: '+key);result[key]=n;
   }
   if(result.interval>0&&result.interval<5)throw new Error('รอบอัตโนมัติขั้นต่ำ 5 นาที');
-  for(const key of ['countryMarkups','productMarkups','categoryCountryMarkups','itunesAgeMarkups']){
+  for(const key of ['countryMarkups','productMarkups','categoryCountryMarkups','itunesAgeMarkups','fulfillmentMarkups']){
     const map=value[key]??{};
     if(!map||typeof map!=='object'||Array.isArray(map))throw new Error('Invalid '+key);
     result[key]={};
     for(const [id,n] of Object.entries(map)){
-      if(!(key==='itunesAgeMarkups'?/^[A-Z]{2,8}:(1|5|9)\+$/:key==='countryMarkups'?/^[A-Z]{2,8}$/:key==='categoryCountryMarkups'?/^(itunes|xbox|razer|mycard):[A-Z]{2,8}$/:/^[0-9]+$/).test(id)||typeof n!=='number'||!Number.isFinite(n)||n<0||n>1000)throw new Error('Invalid '+key);
+      if(!(key==='fulfillmentMarkups'?/^(itunes|xbox|razer|mycard):[A-Z]{2,8}:(stock|recharge)$/:key==='itunesAgeMarkups'?/^[A-Z]{2,8}:(1|5|9)\+$/:key==='countryMarkups'?/^[A-Z]{2,8}$/:key==='categoryCountryMarkups'?/^(itunes|xbox|razer|mycard):[A-Z]{2,8}$/:/^[0-9]+$/).test(id)||typeof n!=='number'||!Number.isFinite(n)||n<0||n>1000)throw new Error('Invalid '+key);
       result[key][id]=n;
     }
   }

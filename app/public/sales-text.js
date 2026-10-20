@@ -26,14 +26,15 @@ export function itunesSalesText(accounts,unitPriceFor){
   return lines.join('\n');
 }
 
-export function productSalesText(snapshot,product,unitPriceFor){
- if(product==='itunes')return itunesSalesText(snapshot.accounts||[],unitPriceFor);
+export function productSalesText(snapshot,product,unitPriceFor,kind){
+ if(product==='itunes'&&kind!=='recharge')return itunesSalesText(snapshot.accounts||[],unitPriceFor);
  const category=product==='itunes-recharge'?'itunes':product;
+ if(kind==='stock'){const lines=['- '+category+' มีของแล้ว -','ราคาขาย: บาทต่อหน่วยยอดบัตร',''];for(const x of (snapshot.accounts||[]).filter(x=>x.category===category&&x.stock>0))lines.push(category+' '+x.country.toLowerCase()+' '+formatSaleRate(unitPriceFor(x))+' : '+x.denomination+'*'+x.stock);if(lines.length===3)lines.push('ยังไม่มีสินค้า');return lines.join('\n');}
  const lines=['- '+category+' เติมบัญชี -','ราคาเติม: บาทต่อหน่วยยอดเติม',''];
  const quotes=new Set();
  for(const x of (snapshot.recharge||[]).filter(x=>(x.category||'itunes')===category))quotes.add(category+' '+x.country.toLowerCase()+' '+x.channel+' '+formatSaleRate(unitPriceFor(x)));
  lines.push(...quotes);
- const cards=product==='itunes-recharge'?[]:(snapshot.accounts||[]).filter(x=>x.category===category&&x.type==='Card'&&x.stock>0);
+ const cards=kind==='recharge'||product==='itunes-recharge'?[]:(snapshot.accounts||[]).filter(x=>x.category===category&&x.type==='Card'&&x.stock>0);
  if(cards.length){lines.push('','- '+category+' บัตร -','ราคาขาย: บาทต่อหน่วยยอดบัตร');for(const x of cards)lines.push(category+' '+x.country.toLowerCase()+' '+formatSaleRate(unitPriceFor(x))+' : '+x.denomination+'*'+x.stock);}
  if(!quotes.size&&!cards.length)lines.push('ยังไม่มีข้อมูล กรุณาอัปเดตข้อมูล');return lines.join('\n');
 }
