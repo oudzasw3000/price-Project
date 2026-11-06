@@ -14,7 +14,7 @@ test('API text equals frontend copy text with age overrides, blanks, and country
  runInNewContext(source.slice(source.indexOf('function money('),source.indexOf('function currency(')),context);
  const response=salesResponse(snapshot,settings,{usable:true,price:settings.fx});
  assert.deepEqual(Object.keys(response),['text']);assert.equal(response.text,itunesSalesText(accounts,row=>context.sell(row)/row.denomination));
- assert.match(response.text,/itunes de 1\+ :\nitunes de 5\+ :\nitunes de 9\+ :/);assert.match(response.text,/itunes fr 1\+/);assert.doesNotMatch(response.text,/100\*2/);
+ assert.match(response.text,/itunes de 1\+ :\nitunes de 5\+ :\nitunes de 9\+ :/);assert.match(response.text,/itunes fr 1\+/);assert.match(response.text,/itunes us 1\+ [0-9.]+ : 100\*2/);
  assert.equal(JSON.parse(JSON.stringify(response)).text,response.text);
  for(const market of [{usable:false,price:33},{usable:true,price:0}])assert.throws(()=>salesResponse(snapshot,settings,market));
  assert.throws(()=>salesResponse({...snapshot,usdPerUsdt:null},settings,{usable:true,price:33}));
@@ -28,4 +28,10 @@ test('sales keys persist as hashes, reject admin Basic auth, and revoke previous
  const restored=new SalesKeyStore(pool);await restored.load();assert.equal(await restored.authorized('Bearer '+first),true);
  const second=await restored.rotate();assert.equal(await keys.authorized('Bearer '+first),false);assert.equal(await keys.authorized('Bearer '+second),true);
  }finally{await pool.end();}
+});
+
+test('0-1 is displayed as 1+ without merging rates or changing actual ages',()=>{
+ const rows=[{category:'itunes',country:'US',age:'0-1',denomination:500,stock:3},{category:'itunes',country:'US',age:'1-5',denomination:500,stock:7}];
+ const text=itunesSalesText(rows,x=>x.age==='0-1'?27.1:27.3);
+ assert.match(text,/itunes us 1\+ 27.10 : 500\*3/);assert.match(text,/itunes us 1\+ 27.30 : 500\*7/);assert.doesNotMatch(text,/500\*10/);assert.equal(rows[0].age,'0-1');
 });

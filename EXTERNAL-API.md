@@ -60,7 +60,7 @@ Replace expiresAt with a future UTC ISO timestamp, at most 24 hours ahead. For e
 
 - costUsdt is the **total cost for one account/card or the given recharge denomination**, not the cost per unit. The application divides by denomination when displaying unit rates, adds the configured acquisition allowance and markup, then rounds sale rates upward to four significant digits.
 - Product values: itunes, xbox, razer, mycard. Country uses uppercase codes, e.g. US, UK, TW, MX (not MXN).
-- kind account is currently iTunes only and requires age and stock. Ages: 0-1, 1-5, 5-9, 9+. Age 0-1 is excluded from sales copy.
+- kind account is currently iTunes only and requires age and stock. Ages: 0-1, 1-5, 5-9, 9+. Age 0-1 is displayed as 1+ in sales copy (including sales APIs); its original age and pricing remain unchanged and rows are not merged.
 - kind card supports Xbox, Razer and MyCard; stock is a nonnegative integer. kind recharge requires a nonempty channel and displays rates without customer quantities or stock.
 - id must be unique in this source snapshot. It is namespaced by source; matching ids from other sources do not overwrite it.
 - Every PUT replaces **all products for that source** atomically. Include all current products; omitted rows disappear. Sending items: [] clears that source inventory. Retrying the same body does not duplicate inventory.
@@ -108,3 +108,5 @@ Legacy URLs remain unchanged: `/api/sales/itunes` is stock, `/api/sales/itunes-r
 Setting now includes independent stock/recharge markup per product and country, stored in `fulfillmentMarkups` (example keys `xbox:US:stock`, `xbox:US:recharge`). Blank inherits the previous category/country markup, then legacy iTunes country markup, then global markup; zero is a valid override. iTunes stock age overrides 1+/5+/9+ take precedence over stock markup. Existing saved settings are not reset. Old clients omitting fulfillmentMarkups preserve the saved map.
 
 External input contract stays the same: kind=account or card maps to stock; kind=recharge maps to recharge. No external feed migration is needed.
+
+Sales-copy age label: both 0-1 and 1-5 display as 1+ in copy text and sales APIs. Original ages, pricing/markup rules and inventory filters remain unchanged; each price/stock row remains separate.

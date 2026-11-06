@@ -11,9 +11,9 @@ export function itunesSalesText(accounts,unitPriceFor){
   accounts=accounts.filter(x=>(x.category||'itunes')==='itunes');
   const countries=[...new Set(accounts.map(x=>x.country))],lines=['- itunes -','ราคาขาย: บาทต่อหน่วยยอดบัญชี',''];
   for(const c of countries){
-    const rows=accounts.filter(x=>x.country===c&&x.age!=='0-1'&&x.stock>0);
+    const rows=accounts.filter(x=>x.country===c&&x.stock>0);
     for(const age of ['1+','5+','9+']){
-      const group=rows.filter(x=>x.age===({'1+':'1-5','5+':'5-9','9+':'9+'})[age]);
+      const group=rows.filter(x=>(age==='1+'?['0-1','1-5'].includes(x.age):x.age===({'5+':'5-9','9+':'9+'})[age]));
       for(const x of group){
         const price=unitPriceFor(x);if(!Number.isFinite(price)||price<0)throw new Error('Invalid sale price');
         const rate=formatSaleRate(price);

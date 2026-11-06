@@ -85,3 +85,5 @@ Legacy URLs remain unchanged: `/api/sales/itunes` is stock, `/api/sales/itunes-r
 Setting now includes independent stock/recharge markup per product and country, stored in `fulfillmentMarkups` (example keys `xbox:US:stock`, `xbox:US:recharge`). Blank inherits the previous category/country markup, then legacy iTunes country markup, then global markup; zero is a valid override. iTunes stock age overrides 1+/5+/9+ take precedence over stock markup. Existing saved settings are not reset. Old clients omitting fulfillmentMarkups preserve the saved map.
 
 External input contract stays the same: kind=account or card maps to stock; kind=recharge maps to recharge. No external feed migration is needed.
+
+Sales-copy age label: both 0-1 and 1-5 display as 1+ in copy text and sales APIs. Original ages, pricing/markup rules and inventory filters remain unchanged; each price/stock row remains separate.
